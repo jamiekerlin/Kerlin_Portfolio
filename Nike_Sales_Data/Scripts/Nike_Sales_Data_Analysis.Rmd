@@ -1,0 +1,288 @@
+---
+title: "Nike Sales Data 2020-2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_section: true
+    highlight: tango
+    theme: readable
+author: "Jamie Kerlin"
+date: "2024-07-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+# Overview
+
+## Purpose
+
+The purpose of this document is to clean and analyze the Nike Sales Dataset 2020-2021.
+
+## Data Citation
+
+This is a test dataset downloaded from Kaggle on 2024-07-30 https://www.kaggle.com/datasets/pavankota2020/nike-sales-dataset?resource=download
+
+# Setup
+
+## Load libraries
+
+```{r}
+package_names <- c("tidyverse", "here", "janitor", "vtable", "ggimage", "lubridate")
+
+for(x in package_names){
+  if(!x %in% rownames(installed.packages())) install.packages(x)
+}
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(lubridate)
+library(vtable)
+library(ggimage)
+
+```
+
+
+## Load data
+
+```{r}
+
+data <- read_csv(here("Nike_Sales_Data",
+                      "Data",
+                      "Data_Raw",
+                      "nike_data.csv"))
+
+```
+
+# Data exploration and cleaning
+
+## Clean names
+
+Change the column names to clean names using janitor package.
+
+```{r}
+
+data <- data %>%
+  clean_names()
+
+```
+
+## Column information
+
+First, check for basics such as missing values, the number of distinct values in each column, and the data class for each of the columns.
+```{r}
+
+# 9360 rows, 9 columns
+
+# Check for any NAs
+nas <- data %>%
+  filter(!complete.cases(.))
+
+# How many distinct values are in each of the columns?
+data %>%
+  map_dbl(n_distinct)
+
+# What classes of data are in the dataset?
+vtable(data)
+  
+  
+```
+
+Next, I will look at descriptives of those column values
+
+What are the frequencies of the values in the columns?
+
+```{r}
+
+sumtable(data)
+
+data_gg <- data %>%
+  pivot_longer(cols = product:sales_method,
+               names_to = "characteristic",
+               values_to = "characteristic_value") %>%
+  group_by(characteristic, characteristic_value) %>%
+  summarise(ch_num = n())
+
+
+ggplot(data_gg, mapping = aes(x = characteristic_value, y = ch_num)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~characteristic, scales = "free")
+
+data_gg_num <- data %>%
+  pivot_longer(cols = price_per_unit:units_sold,
+               names_to = "characteristic",
+               values_to = "characteristic_value")
+
+
+ggplot(data_gg_num, mapping = aes(x = characteristic_value)) +
+  geom_histogram() +
+  facet_wrap(~characteristic, scales = "free")
+
+
+data %>%
+  mutate(state = fct_infreq(state)) %>%
+  ggplot(mapping = aes(x = state, fill = region)) +
+    geom_bar() +
+    coord_flip() +
+    facet_wrap(~region, scales = "free")
+
+
+```
+
+Check invoice date
+
+I want to make sure the date format is consistent in the invoice date column
+
+```{r}
+
+date_test <- data %>%
+  mutate(year = str_sub(invoice_date, 7, 10),
+         month = str_sub(invoice_date, 4, 5),
+         day = str_sub(invoice_date, 1, 2))
+
+date_test %>% count(year)
+date_test %>% count(month)
+date_test %>% count(day)
+
+# ok, date formats are correct- use lubridate on the column to get final consistent format
+data$invoice_date <- lubridate::dmy(data$invoice_date)
+```
+
+
+Create a dataset to compare sales by categories
+
+```{r}
+
+data_sales <- data %>%
+  pivot_longer(cols = product:state,
+               names_to = "cat_char",
+               values_to = "cat_value") %>%
+  pivot_longer(cols = price_per_unit:units_sold, 
+               names_to = "num_char",
+               values_to = "num_value") %>%
+  group_by(cat_char, cat_value, num_char) %>%
+  summarise(mean_num_value = mean(num_value),
+            total_num_value = sum(num_value)) %>%
+  filter(cat_char != "state") %>%
+  ungroup() %>%
+  group_by(cat_char) %>%
+  nest()
+
+
+```
+
+
+Compare average daily sales
+
+```{r}
+output <- list()
+
+for(y in 1:4){
+plot <- data_sales %>%
+  pluck("data", y) %>%
+  ggplot(mapping = aes(x = cat_value, y = mean_num_value)) + 
+    geom_col() + 
+    coord_flip() +
+    facet_wrap(~num_char, ncol = 3, scales = "free_x") 
+
+output[[y]] <- plot
+}
+
+print(output)
+```
+
+On average per day:  
+  - Women and men's apparel is more expensive than footwear   
+  - Women's apparel and men's street footwear sells the most units, women's athletic footwear sells the least  
+  - Price per unit is lower in the south and midwest  
+  - Most units sold in the west, southeast, and south  
+  - Price per unit between retailers not very much  
+  - Walmart sells the most units, Amazon sells the least  
+  - Outlets have lower price per units  
+  - Most sales from in-person  
+
+
+Compare total sales over 2 years
+
+```{r}
+output <- list()
+
+for(y in 1:4){
+plot <- data_sales %>%
+  pluck("data", y) %>%
+  ggplot(mapping = aes(x = cat_value, y = total_num_value)) + 
+    geom_col() + 
+    coord_flip() +
+    facet_wrap(~num_char, ncol = 3, scales = "free_x") 
+
+output[[y]] <- plot
+}
+
+print(output)
+```
+Total throughout the two years:
+  - Women and men's apparel is more expensive than footwear   
+  - Women's apparel and men's street footwear sells the most units, followed closely by men's athletic footwear
+  - Women's athletic footwear and men's apparel sell the fewest units
+  - Price per unit is way higher in west and northeast
+  - Most units sold in the west, northeast, and south  
+  - Price per unit very different but because more units sold at some places
+  - Most units sold at West Gear, Foot Locker, and Sports Direct
+  - Most units sold online, fewest in-store
+  
+  
+What do the sales look like throughout the two years?
+
+Make a dataset to look at sales by year, quarter, month
+```{r}
+
+data_time <- data %>%
+  mutate(year = year(invoice_date),
+         quarter = quarter(invoice_date),
+         month = month(invoice_date)) %>%
+  select(!product:state) %>%
+  pivot_longer(cols = year:month,
+               names_to = "date_char",
+               values_to = "date_value") %>%
+  pivot_longer(cols = price_per_unit:units_sold, 
+               names_to = "num_char",
+               values_to = "num_value") %>%
+  group_by(date_char, date_value, num_char) %>%
+  summarise(num_value = if_else(num_char == "price_per_unit", mean(num_value), sum(num_value))) %>%
+  unique() %>%
+  ungroup() %>%
+  group_by(date_char) %>%
+  nest()
+
+```  
+
+
+```{r}
+output <- list()
+
+for(y in 1:3){
+plot <- data_time %>%
+  pluck("data", y) %>%
+  ggplot(mapping = aes(x = as.factor(date_value), y = num_value)) + 
+    geom_col() + 
+    coord_flip() +
+    facet_wrap(~num_char, ncol = 3, scales = "free_x") 
+
+output[[y]] <- plot
+}
+
+print(output)
+```
+
+Over time:  
+  - More expensive things (inc mean price per unit) sold in December and July  
+  - Most units sold in January, August and September  
+  - More expensive items sold in 2020 but more items in total sold in 2021
+  
+  
+  
