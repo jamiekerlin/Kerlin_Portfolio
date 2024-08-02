@@ -130,14 +130,12 @@ to show an example of how to use these functions.
 ```{r}
 
 starwars_data %>%
-  write_csv(here("025 - Statistics",
-                 "Summer 2024 Stats Workshop",
-                 "Tidyverse",
+  write_csv(here("Tutorials",
+                 "Intro_To_The_Tidyverse",
                  "starwars.csv"))
 
-starwars_data_example <- read_csv(here("025 - Statistics",
-                 "Summer 2024 Stats Workshop",
-                 "Tidyverse",
+starwars_data_example <- read_csv(here("Tutorials",
+                 "Intro_To_The_Tidyverse",
                  "starwars.csv"))
 
 ```
