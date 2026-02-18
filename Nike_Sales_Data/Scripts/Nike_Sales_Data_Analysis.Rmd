@@ -31,7 +31,8 @@ This is a test dataset downloaded from Kaggle on 2024-07-30 https://www.kaggle.c
 ## Load libraries
 
 ```{r}
-package_names <- c("tidyverse", "here", "janitor", "vtable", "ggimage", "lubridate")
+package_names <- c("tidyverse", "here", "janitor", "vtable", "ggimage", "lubridate",
+                   "car", "marginaleffects", "ggeffects", "olsrr", "ggcorrplot")
 
 for(x in package_names){
   if(!x %in% rownames(installed.packages())) install.packages(x)
@@ -43,6 +44,11 @@ library(janitor)
 library(lubridate)
 library(vtable)
 library(ggimage)
+library(car)
+library(marginaleffects)
+library(ggeffects)
+library(olsrr)
+library(ggcorrplot)
 
 ```
 
@@ -62,16 +68,18 @@ data <- read_csv(here("Nike_Sales_Data",
 
 ## Clean names
 
-Change the column names to clean names using janitor package.
+Change the column names to clean names using janitor package. Create unique row ID column
 
 ```{r}
 
 data <- data %>%
-  clean_names()
+  clean_names() %>%
+  mutate(id = 1:n()) %>%
+  select(id, everything())
 
 ```
 
-## Column information
+## Explore data
 
 First, check for basics such as missing values, the number of distinct values in each column, and the data class for each of the columns.
 ```{r}
@@ -89,8 +97,20 @@ data %>%
 # What classes of data are in the dataset?
 vtable(data)
   
+# see if duplicated rows for all categories
+dupes <- data %>%
+  select(where(is.character)) %>%
+  get_dupes()
+
+
+# look at those duplicated rows- there are multiple rows for categories but no unique identifier for the products
+# so the duplicates are OK
+get_dupes <- left_join(dupes, data)
   
 ```
+
+
+## Descriptives
 
 Next, I will look at descriptives of those column values
 
@@ -151,6 +171,40 @@ date_test %>% count(day)
 
 # ok, date formats are correct- use lubridate on the column to get final consistent format
 data$invoice_date <- lubridate::dmy(data$invoice_date)
+```
+
+Box plots
+
+```{r}
+data_sales <- data %>%
+  pivot_longer(cols = product:state,
+               names_to = "cat_char",
+               values_to = "cat_value") %>%
+  pivot_longer(cols = price_per_unit:units_sold, 
+               names_to = "num_char",
+               values_to = "num_value") %>%
+  group_by(cat_char, cat_value, num_char) %>%
+  filter(cat_char != "state") %>%
+  ungroup() %>%
+  group_by(cat_char) %>%
+  nest()
+```
+
+```{r}
+output <- list()
+
+for(y in 1:4){
+plot <- data_sales %>%
+  pluck("data", y) %>%
+  ggplot(mapping = aes(x = cat_value, y = num_value)) + 
+    geom_boxplot() + 
+    coord_flip() +
+    facet_wrap(~num_char, ncol = 3, scales = "free_x") 
+
+output[[y]] <- plot
+}
+
+print(output)
 ```
 
 
@@ -225,15 +279,16 @@ output[[y]] <- plot
 
 print(output)
 ```
-Total throughout the two years:
-  - Women and men's apparel is more expensive than footwear   
-  - Women's apparel and men's street footwear sells the most units, followed closely by men's athletic footwear
-  - Women's athletic footwear and men's apparel sell the fewest units
-  - Price per unit is way higher in west and northeast
-  - Most units sold in the west, northeast, and south  
-  - Price per unit very different but because more units sold at some places
-  - Most units sold at West Gear, Foot Locker, and Sports Direct
-  - Most units sold online, fewest in-store
+
+Total throughout the two years:  
+  - Women and men's apparel is more expensive than footwear     
+  - Women's apparel and men's street footwear sells the most units, followed closely by men's athletic footwear  
+  - Women's athletic footwear and men's apparel sell the fewest units  
+  - Price per unit is way higher in west and northeast  
+  - Most units sold in the west, northeast, and south    
+  - Price per unit very different but because more units sold at some places  
+  - Most units sold at West Gear, Foot Locker, and Sports Direct  
+  - Most units sold online, fewest in-store  
   
   
 What do the sales look like throughout the two years?
@@ -284,5 +339,163 @@ Over time:
   - Most units sold in January, August and September  
   - More expensive items sold in 2020 but more items in total sold in 2021
   
+
+
+## Bivariate descriptives
+
+How do products sell based on multiple variables?
+
+
+Set up dataset to easily check this
+```{r}
+
+data_long <- data %>%
+  mutate(product_abbrev = case_when(product == "Men's Apparel" ~ "MA",
+                                    product == "Men's Athletic Footwear" ~ "MAF",
+                                    product == "Men's Street Footwear" ~ "MSF",
+                                    product == "Women's Apparel" ~ "WA",
+                                    product == "Women's Athletic Footwear" ~ "WAF",
+                                    product == "Women's Street Footwear" ~ "WSF")) %>%
+  mutate(year = as.character(year(invoice_date)),
+         month = as.character(month(invoice_date))) %>%
+  select(!c(product, state)) %>%
+  pivot_longer(cols = where(is.character)) 
+
+
+```
+
+Visualize bivariate descriptives
+
+Here, I'm looking at each categorical variable (minus state) crossed with each other.
+Many plots, so I won't have them all show here.
+```{r, message = FALSE}
+
+variable <- unique(data_long$name)
+
+for(x in variable){
   
+  for(y in variable){
   
+    if(x != y){
+    data_plot <- data_long %>%
+      filter(name == x)
+    
+    data_plot2 <- data_long %>%
+      filter(name == y) %>%
+      rename(name2 = name,
+             value2 = value)
+    
+    data_plot_final <- full_join(data_plot, data_plot2)
+    
+    plot <-
+      ggplot(data_plot_final, mapping = aes(x = value, y = units_sold, fill = value2)) +
+      geom_boxplot() +
+      theme_bw() +
+      guides(fill = "none") +
+      theme(axis.text.x = element_text(angle = 90)) +
+      facet_wrap(~value2)
+    
+    print(plot)
+    }
+  
+  }
+}
+
+```
+
+
+
+
+```{r}
+f <- function(x, y) {
+  tbl <- data %>%
+    select(x, y) %>%
+    table()
+  
+  chisq_pval <-  round(chisq.test(tbl)$p.value, 4)
+  
+  data.frame(x, y, chisq_pval)
+}
+
+# create unique combinations of column names
+# sorting will help getting a better plot (upper triangular)
+df_comb = data.frame(t(combn(sort(names(data)), 2)), stringsAsFactors = F)
+
+# apply function to each variable combination
+df_res = map2_df(df_comb$X1, df_comb$X2, f)
+
+# plot results
+df_res %>%
+  ggplot(aes(x,y,fill=chisq_pval))+
+  geom_tile()+
+  scale_fill_gradient(low="red", high="yellow")+
+  theme_classic()
+
+
+data_cor <- data %>%
+  select(!c(id, state, invoice_date, units_sold, total_sales, product))
+
+model.matrix(~0+., data=data_cor) %>% 
+  cor(use="pairwise.complete.obs") %>% 
+  ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE, lab_size=2.5) 
+```
+
+
+# Prep data for models
+
+
+```{r}
+
+hist(data_mod$units_sold) # we have zero-inflated data so want to transform our data
+
+data_mod <- data %>%
+  mutate_if(is.character, as.factor) %>% # also want to convert characters to factors
+  mutate(units_sold_log = log(units_sold + 0.1)) %>%
+  as.data.frame()
+
+
+```
+
+
+# Questions
+
+## Question 1
+
+What is the best selling product after statistically controlling for other variables?
+
+```{r}
+
+# Better to use state or to use region?
+
+summary(mod1 <- lm(units_sold_log ~ product + retailer + sales_method + state + price_per_unit,
+                   data = data_mod))
+
+summary(mod1.1 <- lm(units_sold_log ~ product + retailer + sales_method + region + price_per_unit,
+                   data = data_mod))
+
+AIC(mod1, mod1.1)
+
+
+# Interaction terms?
+
+summary(mod1.2 <- lm(units_sold_log ~ product + retailer*region + sales_method + region + price_per_unit,
+                   data = data_mod))
+
+AIC(mod1, mod1.2)
+
+
+ols_plot_resid_qq(mod1)
+ols_test_correlation(mod1)
+ols_plot_resid_hist(mod1)
+ols_plot_resid_fit(mod1)
+vif(mod1)
+
+output <- tidy(mod1)
+
+predict <- ggeffect(mod1.1, terms = "product")
+
+
+vif(mod1)
+
+```
+
