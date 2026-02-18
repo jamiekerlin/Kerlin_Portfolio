@@ -1,6 +1,7 @@
 # Jamie Kerlin's Portfolio
 
 ## Tableau Dashboards
+Most of my dashboards are private for stakeholders, but here are two of the public Tableau dashboards that I have created.
 * [Student Responses to the National Survey of Student Engagement](https://www.csun.edu/counts/survey_nsse.php)
 * [Student Progression - Retention and Graduation](https://www.csun.edu/counts/student_progression.php)
 
