@@ -9,6 +9,8 @@ Most of my dashboards are private for stakeholders, but here are two of the publ
 * [Conspecific interactions between corals mediate the effect of submarine groundwater discharge on coral physiology](https://github.com/jamiekerlin/Species_interactions_mediate_SGD_effects_coral_physiology)
 
 ## R Tutorials
+* [Install and Load Packages in R](https://rpubs.com/jamiekerlin/just-a-lady-coder-install-load-packages)
+* [Importing Data in R](https://rpubs.com/jamiekerlin/just-a-lady-coder-importing-data)
 * [Intro to the Tidyverse](https://rpubs.com/jamiekerlin/tidyverse-intro)
 
 ## R Shiny
